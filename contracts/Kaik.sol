@@ -11,7 +11,7 @@ https://t.me/KAIKARMY
 */
 
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17 >=0.8.10 >=0.8.0 <0.9.0;
+pragma solidity ^0.8.9;
 pragma experimental ABIEncoderV2;
 
 ////// lib/openzeppelin-contracts/contracts/utils/Context.sol
