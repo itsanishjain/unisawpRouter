@@ -2,12 +2,13 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-contract Meme is ERC20, Ownable {
+contract Fetch is ERC20, Ownable {
     IUniswapV2Router02 public immutable uniswapV2Router;
     address public immutable uniswapV2Pair;
     address public constant deadAddress = address(0xdead);
@@ -17,13 +18,9 @@ contract Meme is ERC20, Ownable {
 
     address public marketingWallet;
 
-    // TODO: What can be this is useful for
     uint256 public swapTokensAtAmount;
 
-    // TODO: Safeguard
-    bool public limitsInEffect = true;
-    bool public tradingActive = false;
-    bool public swapEnabled = false;
+    bool public swapEnabled = true;
 
     // Anti-bot and anti-whale mappings and variables
     mapping(address => uint256) private _holderLastTransferTimestamp; // to hold last Transfers temporarily during launch
@@ -61,7 +58,7 @@ contract Meme is ERC20, Ownable {
         uint256 tokensIntoLiquidity
     );
 
-    constructor() ERC20("Meme", "MTK") {
+    constructor() ERC20("FETCH", "FETCH") {
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
             0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
         );
@@ -72,14 +69,13 @@ contract Meme is ERC20, Ownable {
             .createPair(address(this), _uniswapV2Router.WETH());
         _setAutomatedMarketMakerPair(address(uniswapV2Pair), true);
 
-        uint256 _buyMarketingFee = 5;
-        uint256 _buyLiquidityFee = 5;
+        uint256 _buyMarketingFee = 3;
+        uint256 _buyLiquidityFee = 0;
 
-        uint256 _sellMarketingFee = 5;
-        uint256 _sellLiquidityFee = 5;
+        uint256 _sellMarketingFee = 3;
+        uint256 _sellLiquidityFee = 0;
 
-        // TODO: Set total token supply
-        uint256 totalSupply = 1_000_000_000_000 * 1e18;
+        uint256 totalSupply = 250_000_000_000 * 1e18;
 
         swapTokensAtAmount = (totalSupply * 5) / 10000; // 0.05% swap wallet
 
@@ -91,8 +87,7 @@ contract Meme is ERC20, Ownable {
         sellLiquidityFee = _sellLiquidityFee;
         sellTotalFees = sellMarketingFee + sellLiquidityFee;
 
-        // TODO: Set marketing wallet
-        marketingWallet = address(0x022F596c1A79d7986302f5C29f4E275fA7A5fF8C); // set as marketing wallet
+        marketingWallet = address(0xa72775DeF705F892e0eb0C273455D52867D3F272); // set as marketing wallet
 
         // exclude from paying fees or having max transaction amount
         excludeFromFees(owner(), true);
@@ -108,26 +103,12 @@ contract Meme is ERC20, Ownable {
 
     receive() external payable {}
 
-    // TODO: owner needs to call this function
-    // once enabled, can never be turned off
-    function enableTrading() external onlyOwner {
-        tradingActive = true;
-        swapEnabled = true;
-    }
-
-    // remove limits after token is stable
-    function removeLimits() external onlyOwner returns (bool) {
-        limitsInEffect = false;
-        return true;
-    }
-
     // disable Transfer delay - cannot be reenabled
     function disableTransferDelay() external onlyOwner returns (bool) {
         transferDelayEnabled = false;
         return true;
     }
 
-    // TODO: I don't know usecase here
     // change the minimum amount of tokens to sell from fees
     function updateSwapTokensAtAmount(uint256 newAmount)
         external
@@ -158,7 +139,6 @@ contract Meme is ERC20, Ownable {
         buyMarketingFee = _marketingFee;
         buyLiquidityFee = _liquidityFee;
         buyTotalFees = buyMarketingFee + buyLiquidityFee;
-        // TODO: Have to asks this
         require(buyTotalFees <= 10, "Must keep fees at 10% or less");
     }
 
@@ -169,7 +149,6 @@ contract Meme is ERC20, Ownable {
         sellMarketingFee = _marketingFee;
         sellLiquidityFee = _liquidityFee;
         sellTotalFees = sellMarketingFee + sellLiquidityFee;
-        // TODO: Have to asks this
         require(sellTotalFees <= 10, "Must keep fees at 10% or less");
     }
 
@@ -208,9 +187,6 @@ contract Meme is ERC20, Ownable {
         return _isExcludedFromFees[account];
     }
 
-    // TODO: I don't get this
-    event BoughtEarly(address indexed sniper);
-
     function _transfer(
         address from,
         address to,
@@ -225,44 +201,11 @@ contract Meme is ERC20, Ownable {
             return;
         }
 
-        // TODO: Safeguard against whales and bots
-        if (limitsInEffect) {
-            if (
-                from != owner() &&
-                to != owner() &&
-                to != address(0) &&
-                to != address(0xdead) &&
-                !swapping
-            ) {
-                if (!tradingActive) {
-                    require(
-                        _isExcludedFromFees[from] || _isExcludedFromFees[to],
-                        "Trading is not active."
-                    );
-                }
-
-                // at launch if the transfer delay is enabled, ensure the block timestamps for purchasers is set -- during launch.
-                if (transferDelayEnabled) {
-                    if (
-                        to != owner() &&
-                        to != address(uniswapV2Router) &&
-                        to != address(uniswapV2Pair)
-                    ) {
-                        require(
-                            _holderLastTransferTimestamp[tx.origin] <
-                                block.number,
-                            "_transfer:: Transfer Delay enabled.  Only one purchase per block allowed."
-                        );
-                        _holderLastTransferTimestamp[tx.origin] = block.number;
-                    }
-                }
-            }
-        }
-
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool canSwap = contractTokenBalance >= swapTokensAtAmount;
 
+        //  from user to random
         if (
             canSwap &&
             swapEnabled &&
@@ -276,10 +219,11 @@ contract Meme is ERC20, Ownable {
             swapping = false;
         }
 
-        bool takeFee = !swapping;
+        bool takeFee = !swapping; // true
 
         // if any account belongs to _isExcludedFromFee account then remove the fee
         if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
+            // false
             takeFee = false;
         }
 
@@ -355,11 +299,11 @@ contract Meme is ERC20, Ownable {
 
     function swapBack() private {
         uint256 contractBalance = balanceOf(address(this));
-        uint256 totalTokensToSwap = tokensForLiquidity + tokensForMarketing;
-        bool success;
+        uint256 totalTokensToSwap = tokensForLiquidity + tokensForMarketing; //0
+        bool success; // false
 
         if (contractBalance == 0 || totalTokensToSwap == 0) {
-            return;
+            return; // done
         }
 
         if (contractBalance > swapTokensAtAmount * 20) {
@@ -398,5 +342,25 @@ contract Meme is ERC20, Ownable {
         (success, ) = address(marketingWallet).call{
             value: address(this).balance
         }("");
+    }
+
+    function withdrawTokens(address _tokenAddy, uint256 _amount)
+        external
+        onlyOwner
+    {
+        require(_tokenAddy != address(this), "cannot withdraw this token");
+        IERC20 _token = IERC20(_tokenAddy);
+        _amount = _amount > 0 ? _amount : _token.balanceOf(address(this));
+        require(
+            _amount > 0,
+            "make sure there is a balance available to withdraw"
+        );
+        _token.transfer(owner(), _amount);
+    }
+
+    function withdrawETH() external onlyOwner {
+        uint256 totalBalance = address(this).balance;
+        (bool success, ) = msg.sender.call{value: totalBalance}("");
+        require(success, "WithdrawFailed");
     }
 }
